@@ -4,7 +4,7 @@ library(tidyverse)
 penalties <- read_csv("penalties_2017.csv")
 
 # Vector with the paths to the CSV files
-file_paths <- list.files(pattern = "USG_spending_.*\\.csv", full.names = TRUE)
+file_paths <- list.files(pattern = "budgets\\USG_spending_.*\\.csv", full.names = TRUE)
 
 # Read all CSV files into a list of tibbles
 list_of_tibbles <- lapply(file_paths, read_csv)
