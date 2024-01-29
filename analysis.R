@@ -4,7 +4,7 @@ library(tidyverse)
 penalties <- read_csv("penalties_2017.csv")
 
 # Vector with the paths to the CSV files
-file_paths <- list.files(pattern = "budgets\\USG_spending_.*\\.csv", full.names = TRUE)
+file_paths <- list.files(path = "budgets", pattern = "^USG_spending_.*\\.csv", full.names = TRUE)
 
 # Read all CSV files into a list of tibbles
 list_of_tibbles <- lapply(file_paths, read_csv)
@@ -115,3 +115,169 @@ epa <- all_data %>%
     select(matched_agency, year, OCC, staff) %>%
     mutate(enforecement = ifelse(OCC %in% enforcement_codes, TRUE, FALSE))
 write.csv(epa, "outputs/epa.csv", row.names = FALSE)
+
+
+### Penalties data
+
+# Vector with the paths to the CSV files
+file_paths <- list.files(path = "penalties_data", pattern = "^export.*\\.csv$", full.names = TRUE)
+
+# Read all CSV files into a list of tibbles
+list_of_tibbles <- lapply(file_paths, read_csv)
+
+list_of_tibbles <- lapply(file_paths, function(x) {
+    read_csv(x, show_col_types = FALSE) %>%
+    select(Company, Parent = `Current Parent Company`, Penalty = `Penalty Amount`, 
+           Year = `Penalty Year`, Agency)
+})
+
+
+
+# Combine all tibbles into one big tibble row-wise
+data <- bind_rows(list_of_tibbles)
+data <- na.omit(data)
+data$Penalty <- as.numeric(gsub("\\$", "", gsub(",", "", data$Penalty)))
+
+# load relevant companies
+sp_data <- read_csv("S&P.csv", show_col_types = FALSE)
+
+# Function to match company names progressively
+progressive_match <- function(data_name, sp_name) {
+  data_name_lower <- tolower(data_name)
+  sp_name_lower <- tolower(sp_name)
+  
+  # Split names into words
+  data_words <- str_split(data_name_lower, "\\s+")
+  sp_words <- str_split(sp_name_lower, "\\s+")
+  
+  # Find matches based on progressive words
+  for (i in 1:min(lengths(data_words), lengths(sp_words))) {
+    match <- data_name_lower[startsWith(data_name_lower, sp_words[[1]][1:i])]
+    if (length(match) > 0) {
+      return(match[1]) # Return the first match
+    }
+  }
+  
+  return(NA) # No match found
+}
+
+# Apply the progressive matching function
+sp_data$Matching_Parent <- sapply(sp_data$Name, function(name) {
+  progressive_match(data$Parent, name)
+})
+
+# Check results, and edit manually, I couldn't think of a better way :(
+sp_data
+sp_data$Matching_Parent[sp_data$Name == "JOHNSON + JOHNSON"] <- "Johnson & Johnson"
+sp_data$Matching_Parent[sp_data$Name == "MERCK + CO. INC."] <- "Merck"
+sp_data$Matching_Parent[sp_data$Name == "BANK OF AMERICA CORP"] <- "Bank Of America"
+sp_data$Matching_Parent[sp_data$Name == "US DOLLAR"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "TEXAS INSTRUMENTS INC"] <- "Texa Instruments"
+sp_data$Matching_Parent[sp_data$Name == "APPLIED MATERIALS INC"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "UNITED PARCEL SERVICE CL B"] <- "United Parcel Service"
+sp_data$Matching_Parent[sp_data$Name == "AMERICAN EXPRESS CO"] <- "American Express"
+sp_data$Matching_Parent[sp_data$Name == "AMERICAN TOWER CORP"] <- "American Tower"
+sp_data$Matching_Parent[sp_data$Name == "THE CIGNA GROUP"] <- "Cigna"
+sp_data$Matching_Parent[sp_data$Name == "BOSTON SCIENTIFIC CORP"] <- "Boston Scientific"
+sp_data$Matching_Parent[sp_data$Name == "T MOBILE US INC"] <- "T-Mobile US"
+sp_data$Matching_Parent[sp_data$Name == "CADENCE DESIGN SYS INC"] <- "Cadence Design Systems"
+sp_data$Matching_Parent[sp_data$Name == "SOUTHERN CO/THE"] <- "Southern Company"
+sp_data$Matching_Parent[sp_data$Name == "US BANCORP"] <- "U.S. Bancorp"
+sp_data$Matching_Parent[sp_data$Name == "O REILLY AUTOMOTIVE INC"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "PARKER HANNIFIN CORP"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "GENERAL DYNAMICS CORP"] <- "General Dynamics"
+sp_data$Matching_Parent[sp_data$Name == "AIR PRODUCTS + CHEMICALS INC"] <- "Air Products & Chemicals"
+sp_data$Matching_Parent[sp_data$Name == "ARTHUR J GALLAGHER + CO"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "CAPITAL ONE FINANCIAL CORP"] <- "Capital One Financial"
+sp_data$Matching_Parent[sp_data$Name == "GENERAL MOTORS CO"] <- "General Motors"
+sp_data$Matching_Parent[sp_data$Name == "CROWN CASTLE INC"] <- "Crown Castle"
+sp_data$Matching_Parent[sp_data$Name == "PUBLIC STORAGE"] <- "Public Storage"
+sp_data$Matching_Parent[sp_data$Name == "TE CONNECTIVITY LTD"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "BANK OF NEW YORK MELLON CORP"] <- "Bank of New York Mellon"
+sp_data$Matching_Parent[sp_data$Name == "DR HORTON INC"] <- "Dr Horton"
+sp_data$Matching_Parent[sp_data$Name == "AMERICAN ELECTRIC POWER"] <- "American Electric Power"
+sp_data$Matching_Parent[sp_data$Name == "UNITED RENTALS INC"] <- "United Rentals"
+sp_data$Matching_Parent[sp_data$Name == "WW GRAINGER INC"] <- "WW Grainger"
+sp_data$Matching_Parent[sp_data$Name == "GENERAL MILLS INC"] <- "General Mills"
+sp_data$Matching_Parent[sp_data$Name == "CONSTELLATION ENERGY"] <- "Constellation Energy"
+sp_data$Matching_Parent[sp_data$Name == "FIDELITY NATIONAL INFO SERV"] <- "Fidelity National Information Services"
+sp_data$Matching_Parent[sp_data$Name == "OLD DOMINION FREIGHT LINE"] <- "Old DOminion Freight Line"
+sp_data$Matching_Parent[sp_data$Name == "P G + E CORP"] <- "PG&E Corp."
+sp_data$Matching_Parent[sp_data$Name == "GLOBAL PAYMENTS INC"] <- "Global Payments"
+sp_data$Matching_Parent[sp_data$Name == "ON SEMICONDUCTOR"] <- "On Semiconductor"
+sp_data$Matching_Parent[sp_data$Name == "FAIR ISAAC CORP"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "ARCH CAPITAL GROUP LTD"] <- "Arch Capital"
+sp_data$Matching_Parent[sp_data$Name == "ROYAL CARIBBEAN CRUISES LTD"] <- "Royal Caribbean Cruises"
+sp_data$Matching_Parent[sp_data$Name == "GE HEALTHCARE TECHNOLOGY"] <- "GE HealthCare Technologies"
+sp_data$Matching_Parent[sp_data$Name == "DOLLAR TREE INC"] <- "Dollar Tree"
+sp_data$Matching_Parent[sp_data$Name == "TAKE TWO INTERACTIVE SOFTWRE"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "HARTFORD FINANCIAL SVCS GRP"] <- "Hartford Financial Services"
+sp_data$Matching_Parent[sp_data$Name == "WEST PHARMACEUTICAL SERVICES"] <- "West Pharmaceutical Services"
+sp_data$Matching_Parent[sp_data$Name == "T ROWE PRICE GROUP INC"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "CHURCH + DWIGHT CO INC"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "M + T BANK CORP"] <- "M&T Bank"
+sp_data$Matching_Parent[sp_data$Name == "AMERICAN WATER WORKS CO INC"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "COOPER COS INC/THE"] <- "Cooper Companies"
+sp_data$Matching_Parent[sp_data$Name == "HUNTINGTON BANCSHARES INC"] <- "Huntington Bancshares"
+sp_data$Matching_Parent[sp_data$Name == "WESTERN DIGITAL CORP"] <- "Western Digital"
+sp_data$Matching_Parent[sp_data$Name == "SOUTHWEST AIRLINES CO"] <- "Southwest Airlines"
+sp_data$Matching_Parent[sp_data$Name == "BROWN + BROWN INC"] <- "Brown & Brown"
+sp_data$Matching_Parent[sp_data$Name == "HUNT (JB) TRANSPRT SVCS INC"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "FIRST SOLAR INC"] <- "First Solar"
+sp_data$Matching_Parent[sp_data$Name == "WR BERKLEY CORP"] <- "W.R. Berkley"
+sp_data$Matching_Parent[sp_data$Name == "MID AMERICA APARTMENT COMM"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "STANLEY BLACK + DECKER INC"] <- "Stanley Black & Decker"
+sp_data$Matching_Parent[sp_data$Name == "UNITED AIRLINES HOLDINGS INC"] <- "United Airlines Holdings"
+sp_data$Matching_Parent[sp_data$Name == "GEN DIGITAL INC"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "JACK HENRY + ASSOCIATES INC"] <- "Jack Henry & Associates"
+sp_data$Matching_Parent[sp_data$Name == "BIO TECHNE CORP"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "SCHWAB (CHARLES) CORP"] <- "Charles Schwab Corp."
+sp_data$Matching_Parent[sp_data$Name == "CHARLES RIVER LABORATORIES"] <- "Charles River Laboratories"
+sp_data$Matching_Parent[sp_data$Name == "REGENCY CENTERS CORP"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "BOSTON PROPERTIES INC"] <- "Boston Properties"
+sp_data$Matching_Parent[sp_data$Name == "BROWN FORMAN CORP CLASS B"] <- "Brown-Forman"
+sp_data$Matching_Parent[sp_data$Name == "SMITH (A.O.) CORP"] <- "A.O. Smith Corp."
+sp_data$Matching_Parent[sp_data$Name == "AMERICAN AIRLINES GROUP INC"] <- "American Airlines"
+sp_data$Matching_Parent[sp_data$Name == "WYNN RESORTS LTD"] <- "Wynn Resorts"
+sp_data$Matching_Parent[sp_data$Name == "ROBERT HALF INC"] <- "Robert Half"
+sp_data$Matching_Parent[sp_data$Name == "FOX CORP   CLASS A"] <- "Fox Corporation"
+sp_data$Matching_Parent[sp_data$Name == "FEDERAL REALTY INVS TRUST"] <- NA_character_
+sp_data$Matching_Parent[sp_data$Name == "BIO RAD LABORATORIES A"] <- "Bio-Rad Laboratories"
+sp_data$Matching_Parent[sp_data$Name == "FOX CORP   CLASS B"] <- "Fox Corporation"
+
+write.csv(sp_data, "outputs/S_and_P_processed.csv", row.names = FALSE)
+
+# Microsoft weight in S&P500 on Jan 25, 2024 was 7.32%
+# MIcrosoft capitalisation was then $3.009T
+sp_data$Market_cap <- sp_data$Weight / 7.32 * 3.009e12
+sp_data <- sp_data %>%
+  group_by(Matching_Parent) %>%
+  summarize(Market_cap = sum(Market_cap, na.rm = TRUE))
+
+sp_data <- na.omit(sp_data)
+
+sp_data$Matching_Parent <- tolower(sp_data$Matching_Parent)
+data$Parent <- tolower(data$Parent)
+data <- data %>%
+  left_join(sp_data, by = c("Parent" = "Matching_Parent"))
+data <- na.omit(data)
+
+data$Penalty_scaled <- data$Penalty / data$Market_cap
+data <- data %>%
+  arrange(desc(Penalty_scaled))
+
+write.csv(data, "outputs/penalties_per_market_cap.csv", row.names = FALSE)
+
+summary_stats <- data %>%
+  filter(Penalty_scaled > 1e-3) %>%
+  group_by(Agency) %>%
+  summarize(
+    Fines_Above_Threshold = n(), # Number of fines above 0.1% of market cap
+    Sum_Scaled_Penalty = sum(Penalty_scaled, na.rm = TRUE), # Sum of scaled penalties
+    Sqrt_Sum_Sq_Scaled_Penalty = sqrt(sum(Penalty_scaled^2, na.rm = TRUE)), # Sqrt of sum of squares of scaled penalties
+    Max_Scaled_Penalty = max(Penalty_scaled, na.rm = TRUE) # Maximum scaled penalty
+  ) %>%
+  arrange(desc(Sum_Scaled_Penalty))
+
+summary_stats
+write.csv(summary_stats, "outputs/penalties_per_market_cap_summary.csv", row.names = FALSE)
