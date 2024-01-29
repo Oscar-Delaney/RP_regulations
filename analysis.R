@@ -123,8 +123,6 @@ write.csv(epa, "outputs/epa.csv", row.names = FALSE)
 file_paths <- list.files(path = "penalties_data", pattern = "^export.*\\.csv$", full.names = TRUE)
 
 # Read all CSV files into a list of tibbles
-list_of_tibbles <- lapply(file_paths, read_csv)
-
 list_of_tibbles <- lapply(file_paths, function(x) {
     read_csv(x, show_col_types = FALSE) %>%
     select(Company, Parent = `Current Parent Company`, Penalty = `Penalty Amount`, 
@@ -132,11 +130,10 @@ list_of_tibbles <- lapply(file_paths, function(x) {
 })
 
 
-
 # Combine all tibbles into one big tibble row-wise
 data <- bind_rows(list_of_tibbles)
-data <- na.omit(data)
 data$Penalty <- as.numeric(gsub("\\$", "", gsub(",", "", data$Penalty)))
+write.csv(data, "outputs/all_penalties_data.csv", row.names = FALSE)
 
 # load relevant companies
 sp_data <- read_csv("S&P.csv", show_col_types = FALSE)
