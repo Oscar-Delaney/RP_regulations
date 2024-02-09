@@ -135,7 +135,7 @@ data <- bind_rows(list_of_tibbles)
 data$Penalty <- as.numeric(gsub("\\$", "", gsub(",", "", data$Penalty)))
 write.csv(data, "outputs/all_penalties_data.csv", row.names = FALSE)
 
-# load relevant companies
+# load relevant companies (data as of 24th January 2024)
 sp_data <- read_csv("S&P.csv", show_col_types = FALSE)
 
 # Function to match company names progressively
