@@ -1,4 +1,5 @@
 library(tidyverse)
+library(quantmod)
 
 # load relevant agencies
 penalties <- read_csv("penalties_2017.csv")
@@ -126,13 +127,15 @@ file_paths <- list.files(path = "penalties_data", pattern = "^export.*\\.csv$", 
 list_of_tibbles <- lapply(file_paths, function(x) {
     read_csv(x, show_col_types = FALSE) %>%
     select(Company, Parent = `Current Parent Company`, Penalty = `Penalty Amount`, 
-           Year = `Penalty Year`, Agency)
+           Year = `Penalty Year`, Date = `Penalty Date`, Agency)
 })
 
 
 # Combine all tibbles into one big tibble row-wise
 data <- bind_rows(list_of_tibbles)
 data$Penalty <- as.numeric(gsub("\\$", "", gsub(",", "", data$Penalty)))
+data$Date <- as.Date(as.character(data$Date), format = "%Y%m%d")
+data <- na.omit(data)
 write.csv(data, "outputs/all_penalties_data.csv", row.names = FALSE)
 
 # load relevant companies (data as of 24th January 2024)
@@ -242,24 +245,69 @@ sp_data$Matching_Parent[sp_data$Name == "FEDERAL REALTY INVS TRUST"] <- NA_chara
 sp_data$Matching_Parent[sp_data$Name == "BIO RAD LABORATORIES A"] <- "Bio-Rad Laboratories"
 sp_data$Matching_Parent[sp_data$Name == "FOX CORP   CLASS B"] <- "Fox Corporation"
 
-write.csv(sp_data, "outputs/S_and_P_processed.csv", row.names = FALSE)
-
 # Microsoft weight in S&P500 on Jan 25, 2024 was 7.32%
 # MIcrosoft capitalisation was then $3.009T
 sp_data$Market_cap <- sp_data$Weight / 7.32 * 3.009e12
 sp_data <- sp_data %>%
   group_by(Matching_Parent) %>%
-  summarize(Market_cap = sum(Market_cap, na.rm = TRUE))
+  summarize(Market_cap = sum(Market_cap, na.rm = TRUE), Ticker = head(Ticker, n = 1))
 
 sp_data <- na.omit(sp_data)
+
+sp_data$price <- NA
+for (i in seq_len(nrow(sp_data))) {
+  # Use tryCatch to handle errors gracefully
+  tryCatch({
+    # Fetch the symbol data
+    getSymbols(sp_data$Ticker[i], src = "yahoo",
+               from = as.Date("2024-01-24"),
+               to = as.Date("2024-01-25"))
+    
+    # If successful, extract the closing price
+    sp_data$price[i] <- as.numeric(tail(Cl(get(sp_data$Ticker[i])), n = 1))
+  }, error = function(e) {
+    # Handle errors, for example, by printing a message
+    message("Error with ticker ", sp_data$Ticker[i], ": ", e$message)
+  })
+  
+  # Print progress every 10 iterations
+  if (i %% 10 == 0) {
+    print(i)
+  }
+}
+
+write.csv(sp_data, "outputs/S_and_P_processed.csv", row.names = FALSE)
 
 sp_data$Matching_Parent <- tolower(sp_data$Matching_Parent)
 data$Parent <- tolower(data$Parent)
 data <- data %>%
-  left_join(sp_data, by = c("Parent" = "Matching_Parent"))
-data <- na.omit(data)
+  left_join(sp_data, by = c("Parent" = "Matching_Parent")) %>%
+  drop_na(Ticker)
 
-data$Penalty_scaled <- data$Penalty / data$Market_cap
+data$price_at_time <- NA
+for (i in seq_len(nrow(data))) {
+  # Use tryCatch to handle errors gracefully
+  tryCatch({
+    # Fetch the symbol data
+    getSymbols(data$Ticker[i], src = "yahoo",
+               from = data$Date[i] - 4,
+               to = data$Date[i])
+    
+    # If successful, extract the closing price
+    data$price_at_time[i] <- as.numeric(tail(Cl(get(data$Ticker[i])), n = 1))
+  }, error = function(e) {
+    # Handle errors, for example, by printing a message
+    message("Error with ticker ", data$Ticker[i], ": ", e$message)
+  })
+  
+  # Print progress every 10 iterations
+  if (i %% 50 == 0) {
+    print(i)
+  }
+}
+
+data$Market_cap_at_time <- data$Market_cap * data$price_at_time / data$price
+data$Penalty_scaled <- data$Penalty / data$Market_cap_at_time
 data <- data %>%
   arrange(desc(Penalty_scaled))
 
