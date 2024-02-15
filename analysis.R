@@ -135,6 +135,11 @@ list_of_tibbles <- lapply(file_paths, function(x) {
 data <- bind_rows(list_of_tibbles)
 data$Penalty <- as.numeric(gsub("\\$", "", gsub(",", "", data$Penalty)))
 data$Date <- as.Date(as.character(data$Date), format = "%Y%m%d")
+data$Agency <- gsub(" referral to the Justice Department", "", data$Agency)
+data <- data %>%
+  group_by(Agency) %>%
+  arrange(desc(Penalty)) %>%
+  slice_head(n = 1000)
 write.csv(data, "outputs/all_penalties_data.csv", row.names = FALSE)
 data <- na.omit(data)
 
